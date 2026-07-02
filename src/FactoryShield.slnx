@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="FactoryShield.Api/FactoryShield.Api.csproj" />
+  <Project Path="FactoryShield.Application/FactoryShield.Application.csproj" />
+  <Project Path="FactoryShield.Domain/FactoryShield.Domain.csproj" />
+  <Project Path="FactoryShield.Infrastructure/FactoryShield.Infrastructure.csproj" />
+</Solution>

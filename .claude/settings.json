@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(dotnet --version)",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\BS-Test\\\\LnD\\\\Factoryshield\\\\src\\\\FactoryShield.Domain\\\\Entities\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\BS-Test\\\\LnD\\\\Factoryshield\\\\src\\\\FactoryShield.Infrastructure\\\\Persistence\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\BS-Test\\\\LnD\\\\Factoryshield\\\\src\\\\FactoryShield.Infrastructure\\\\Persistence\\\\Configurations\")",
+      "PowerShell($job = Start-Job -ScriptBlock { Set-Location \"c:\\\\Users\\\\BS-Test\\\\LnD\\\\Factoryshield\\\\src\\\\FactoryShield.Api\"; dotnet run --no-build 2>&1 }; Start-Sleep -Seconds 7; Receive-Job $job -Keep | Select-Object -Last 8)",
+      "WebFetch(domain:incident-management.figma.site)"
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+# ── .NET ──────────────────────────────────────────────
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# ── Angular / Node ────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/.angular/
+npm-debug.log*
+*.log
+
+# ── Playwright ────────────────────────────────────────
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# ── Editor / OS ───────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ── Uploaded files (local dev storage) ────────────────
+src/FactoryShield.Api/wwwroot/uploads/
+
+# ── Local secrets (DB password, JWT key) — copy the .example file and fill in ──
+src/FactoryShield.Api/appsettings.Development.json
+src/FactoryShield.Api/appsettings.Production.json
