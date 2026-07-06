@@ -88,6 +88,10 @@ public static class DataSeeder
         {
             new User { Id = Guid.NewGuid(), Name = "Reporter User", Email = "reporter@factoryshield.dev", RoleId = roles["REPORTER"], PasswordHash = verifier.Hash("Reporter123!") },
             new User { Id = Guid.NewGuid(), Name = "Approver User", Email = "approver@factoryshield.dev", RoleId = roles["APPROVER"], PasswordHash = verifier.Hash("Approver123!") },
+            // Dual-control + Separation of Duties needs 4 eligible governance voters:
+            // 2 approve gate N, the other 2 approve gate N+1, then the first pair is free again.
+            new User { Id = Guid.NewGuid(), Name = "Approver Two", Email = "approver2@factoryshield.dev", RoleId = roles["APPROVER"], PasswordHash = verifier.Hash("Approver123!") },
+            new User { Id = Guid.NewGuid(), Name = "Approver Three", Email = "approver3@factoryshield.dev", RoleId = roles["APPROVER"], PasswordHash = verifier.Hash("Approver123!") },
             new User { Id = Guid.NewGuid(), Name = "Resolver User", Email = "resolver@factoryshield.dev", RoleId = roles["RESOLVER"], PasswordHash = verifier.Hash("Resolver123!") },
             new User { Id = Guid.NewGuid(), Name = "Admin User", Email = "admin@factoryshield.dev", RoleId = roles["ADMIN"], PasswordHash = verifier.Hash("Admin123!") }
         };

@@ -5,6 +5,8 @@ import { AuthService } from './core/services/auth.service';
 import { NotificationService } from './features/notifications/notification.service';
 import { RecentIncidentService } from './core/services/recent-incident.service';
 import { SyncStatusBadgeComponent } from './shared/components/sync-status-badge.component';
+import { ApprovalsService } from './features/approver/approvals.service';
+import { IncidentService } from './features/incidents/incident.service';
 
 const INCIDENTS_ROUTE_PREFIXES = ['/my-incidents', '/report', '/incidents/'];
 
@@ -182,7 +184,9 @@ const INCIDENTS_ROUTE_PREFIXES = ['/my-incidents', '/report', '/incidents/'];
                     <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                   </svg>
                   Corrective Actions
-                  <span class="nav-badge">5</span>
+                  @if (capaCount() !== null && capaCount()! > 0) {
+                    <span class="nav-badge">{{ capaCount() }}</span>
+                  }
                 </a>
 
                 <a class="nav-item" routerLink="/escalation" routerLinkActive="active">
@@ -202,7 +206,9 @@ const INCIDENTS_ROUTE_PREFIXES = ['/my-incidents', '/report', '/incidents/'];
                     <path d="m9 14 2 2 4-4"/>
                   </svg>
                   Approvals
-                  <span class="nav-badge">3</span>
+                  @if (approvalsCount() !== null && approvalsCount()! > 0) {
+                    <span class="nav-badge">{{ approvalsCount() }}</span>
+                  }
                 </a>
 
               </div>
@@ -312,9 +318,15 @@ export class AppComponent implements OnInit, OnDestroy {
   notifSvc = inject(NotificationService);
   recentIncident = inject(RecentIncidentService);
   private router = inject(Router);
+  private approvalsSvc = inject(ApprovalsService);
+  private incidentSvc = inject(IncidentService);
 
   incidentsOpen = signal(this.isIncidentsRoute(this.router.url));
   adminSection = signal<string | null>(null);
+
+  /** Sidebar badge counts — null hides the badge (role has no data / request failed). */
+  capaCount = signal<number | null>(null);
+  approvalsCount = signal<number | null>(null);
 
   constructor() {
     // Open/close the real-time notification push connection as auth state
@@ -331,13 +343,43 @@ export class AppComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.syncAdminSection(this.router.url);
+    this.refreshNavBadges();
     this.router.events.pipe(filter(e => e instanceof NavigationEnd)).subscribe((e) => {
       const url = (e as NavigationEnd).urlAfterRedirects;
       if (this.isIncidentsRoute(url)) {
         this.incidentsOpen.set(true);
       }
       this.syncAdminSection(url);
+      this.refreshNavBadges();
     });
+  }
+
+  /** Reloads the sidebar counts for the current role; runs on init and every navigation. */
+  private refreshNavBadges(): void {
+    if (!this.auth.isAuthenticated()) {
+      this.capaCount.set(null);
+      this.approvalsCount.set(null);
+      return;
+    }
+    const role = (this.auth.currentRole() ?? '').toUpperCase();
+
+    if (role === 'RESOLVER') {
+      this.incidentSvc.getAssignedIncidents().subscribe({
+        next: list => this.capaCount.set(list.length),
+        error: () => this.capaCount.set(null),
+      });
+    } else {
+      this.capaCount.set(null);
+    }
+
+    if (role === 'APPROVER' || role === 'ADMIN') {
+      this.approvalsSvc.getPending().subscribe({
+        next: list => this.approvalsCount.set(list.length),
+        error: () => this.approvalsCount.set(null),
+      });
+    } else {
+      this.approvalsCount.set(null);
+    }
   }
 
   private syncAdminSection(url: string): void {

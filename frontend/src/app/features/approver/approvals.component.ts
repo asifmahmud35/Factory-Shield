@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ApprovalsService, PendingApproval } from './approvals.service';
+import { ApprovalsService, PendingApproval, SubmitApprovalResult } from './approvals.service';
 
 @Component({
   selector: 'app-approvals',
@@ -17,12 +17,15 @@ import { ApprovalsService, PendingApproval } from './approvals.service';
 
   <div class="apr-hd">
     <div>
-      <h1 class="apr-title">Approvals</h1>
-      <p class="apr-sub">Dual-control approval gates awaiting your decision</p>
+      <h1 class="apr-title">Pending Approvals</h1>
+      <p class="apr-sub">
+        @if (accessDenied() || loading() || error()) {
+          Dual-control approval gates awaiting your decision
+        } @else {
+          {{ items().length }} {{ items().length === 1 ? 'item' : 'items' }} awaiting your approval
+        }
+      </p>
     </div>
-    @if (!accessDenied()) {
-      <span class="apr-count">{{ items().length }} pending</span>
-    }
   </div>
 
   @if (accessDenied()) {
@@ -60,6 +63,12 @@ import { ApprovalsService, PendingApproval } from './approvals.service';
           <div class="apr-card-tags">
             <span class="apr-ref">{{ a.incidentReference }}</span>
             <span [class]="'apr-sev ' + sevCls(a.severityLabel)">{{ a.severityLabel }}</span>
+            @if (isUrgent(a)) {
+              <span class="apr-urgent">Urgent</span>
+            }
+            @if (a.approveVotes > 0) {
+              <span class="apr-votes">{{ a.approveVotes }}/{{ a.requiredApprovals }} approvals — yours completes the gate</span>
+            }
           </div>
 
           <div class="apr-card-title">{{ a.approvalTitle }}</div>
@@ -90,10 +99,9 @@ import { ApprovalsService, PendingApproval } from './approvals.service';
     .apr-toast--ok  { background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; }
     .apr-toast--err { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
 
-    .apr-hd { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px; }
-    .apr-title { font-size:20px; font-weight:700; color:#111827; margin:0 0 4px; }
-    .apr-sub { font-size:13px; color:#9ca3af; margin:0; }
-    .apr-count { font-size:12.5px; font-weight:600; color:#6b7280; background:#f3f4f6; padding:5px 12px; border-radius:999px; white-space:nowrap; }
+    .apr-hd { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:22px; }
+    .apr-title { font-size:24px; font-weight:700; color:#111827; margin:0 0 5px; }
+    .apr-sub { font-size:13.5px; color:#6b7280; margin:0; }
 
     .apr-state { padding:28px; text-align:center; font-size:14px; color:#9ca3af; }
     .apr-state--err { color:#991b1b; }
@@ -112,11 +120,11 @@ import { ApprovalsService, PendingApproval } from './approvals.service';
     }
     .apr-view {
       position:absolute; top:20px; right:22px;
-      background:#fff; border:1px solid #e5e7eb; border-radius:7px;
-      padding:7px 14px; font-size:12.5px; font-weight:600; color:#374151;
+      background:#fff; border:1px solid #fecaca; border-radius:999px;
+      padding:7px 16px; font-size:12.5px; font-weight:600; color:#dc2626;
       cursor:pointer; font-family:inherit;
     }
-    .apr-view:hover { background:#f9fafb; }
+    .apr-view:hover { background:#fef2f2; }
 
     .apr-card-tags { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
     .apr-ref { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; font-weight:700; color:#dc2626; letter-spacing:.02em; }
@@ -126,6 +134,14 @@ import { ApprovalsService, PendingApproval } from './approvals.service';
     .apr-sev--medium   { background:#fffbeb; color:#b45309; }
     .apr-sev--low      { background:#f0fdf4; color:#16a34a; }
     .apr-sev--unknown  { background:#f3f4f6; color:#6b7280; }
+    .apr-urgent {
+      font-size:11px; font-weight:700; padding:2px 9px; border-radius:999px;
+      background:#fff; color:#dc2626; border:1px solid #fecaca;
+    }
+    .apr-votes {
+      font-size:11px; font-weight:600; padding:2px 9px; border-radius:999px;
+      background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;
+    }
 
     .apr-card-title { font-size:17px; font-weight:700; color:#111827; margin-bottom:4px; }
     .apr-card-desc { font-size:14px; color:#6b7280; margin-bottom:6px; }
@@ -180,25 +196,33 @@ export class ApprovalsComponent implements OnInit {
   }
 
   approve(a: PendingApproval): void {
-    this.submit(a, true, null, `${a.approvalTitle} approved.`);
+    this.submit(a, true, null, result =>
+      result.gateCompleted
+        ? `${a.incidentReference} — ${a.approvalTitle} approved. Incident advanced to ${result.newStatus}.`
+        : `${a.incidentReference} — your approval was recorded (${result.approveVotes}/${result.requiredApprovals}). Waiting for a second approver.`);
   }
 
   reject(a: PendingApproval): void {
     const reason = prompt(`Reason for rejecting "${a.approvalTitle}" (required):`);
     if (!reason?.trim()) return;
-    this.submit(a, false, reason.trim(), `${a.approvalTitle} rejected.`);
+    this.submit(a, false, reason.trim(), () => `${a.incidentReference} — ${a.approvalTitle} rejected.`);
   }
 
   requestRevision(a: PendingApproval): void {
     const note = prompt(`What revision is required for "${a.approvalTitle}"?`);
     if (!note?.trim()) return;
-    this.submit(a, false, `Revision requested: ${note.trim()}`, 'Revision requested.');
+    this.submit(a, false, `Revision requested: ${note.trim()}`, () => 'Revision requested.');
   }
 
-  private submit(a: PendingApproval, isApprove: boolean, rejectionReason: string | null, okMsg: string): void {
+  private submit(
+    a: PendingApproval,
+    isApprove: boolean,
+    rejectionReason: string | null,
+    okMsg: (result: SubmitApprovalResult) => string,
+  ): void {
     this.busyId.set(a.incidentId);
     this.service.submit(a.incidentId, { approvalType: a.approvalType, isApprove, rejectionReason }).subscribe({
-      next: () => { this.busyId.set(null); this.showToast('ok', okMsg); this.load(); },
+      next: result => { this.busyId.set(null); this.showToast('ok', okMsg(result)); this.load(); },
       error: (err: HttpErrorResponse) => {
         this.busyId.set(null);
         const msg = err.error?.error ?? 'Action failed.';
@@ -213,6 +237,10 @@ export class ApprovalsComponent implements OnInit {
 
   sevCls(label: string): string {
     return 'apr-sev--' + (label ?? 'unknown').toLowerCase();
+  }
+
+  isUrgent(a: PendingApproval): boolean {
+    return (a.severityLabel ?? '').toLowerCase() === 'critical';
   }
 
   private showToast(type: 'ok' | 'err', msg: string): void {

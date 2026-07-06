@@ -31,7 +31,10 @@ public class GovernanceController : ControllerBase
     [HttpGet("approvals/pending")]
     public async Task<IActionResult> GetPendingApprovals(CancellationToken ct)
     {
-        var result = await _mediator.Send(new GetPendingApprovalsQuery(), ct);
+        var actorId = GetCurrentUserId();
+        if (actorId is null) return Unauthorized();
+
+        var result = await _mediator.Send(new GetPendingApprovalsQuery(actorId.Value), ct);
         return Ok(result);
     }
 
@@ -46,14 +49,14 @@ public class GovernanceController : ControllerBase
 
         try
         {
-            await _mediator.Send(new SubmitApprovalCommand(
+            var result = await _mediator.Send(new SubmitApprovalCommand(
                 incidentId,
                 request.ApprovalType,
                 request.IsApprove,
                 request.RejectionReason,
                 actorId.Value), ct);
 
-            return Ok();
+            return Ok(result);
         }
         catch (KeyNotFoundException ex)        { return NotFound(new { error = ex.Message }); }
         catch (InvalidOperationException ex)   { return Conflict(new { error = ex.Message }); }

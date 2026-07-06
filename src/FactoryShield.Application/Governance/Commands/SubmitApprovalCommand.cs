@@ -11,9 +11,20 @@ public record SubmitApprovalCommand(
     bool IsApprove,
     string? RejectionReason,
     Guid ActorId
-) : IRequest;
+) : IRequest<SubmitApprovalResult>;
 
-public class SubmitApprovalCommandHandler : IRequestHandler<SubmitApprovalCommand>
+/// <summary>
+/// Outcome of a gate vote. GateCompleted is true when the incident actually moved
+/// (advanced on 2nd approval, or reverted on rejection); false means the vote was
+/// recorded and the gate is still waiting for a second approver.
+/// </summary>
+public record SubmitApprovalResult(
+    bool GateCompleted,
+    string? NewStatus,
+    int ApproveVotes,
+    int RequiredApprovals);
+
+public class SubmitApprovalCommandHandler : IRequestHandler<SubmitApprovalCommand, SubmitApprovalResult>
 {
     private readonly IIncidentRepository _incidents;
     private readonly IApprovalEventRepository _events;
@@ -37,6 +48,9 @@ public class SubmitApprovalCommandHandler : IRequestHandler<SubmitApprovalComman
         _logger = logger;
         _dispatcher = dispatcher;
     }
+
+    /// <summary>Dual-control: every gate needs approvals from two distinct approvers.</summary>
+    public const int RequiredApprovals = 2;
 
     private static readonly Dictionary<IncidentStatus, ApprovalType> _stateToGate = new()
     {
@@ -70,7 +84,7 @@ public class SubmitApprovalCommandHandler : IRequestHandler<SubmitApprovalComman
         [ApprovalType.ResolutionFinal]    = ApprovalType.CapaVerification,
     };
 
-    public async Task Handle(SubmitApprovalCommand request, CancellationToken ct)
+    public async Task<SubmitApprovalResult> Handle(SubmitApprovalCommand request, CancellationToken ct)
     {
         var incident = await _incidents.FindByIdAsync(request.IncidentId, ct)
             ?? throw new KeyNotFoundException($"Incident {request.IncidentId} not found.");
@@ -112,6 +126,7 @@ public class SubmitApprovalCommandHandler : IRequestHandler<SubmitApprovalComman
 
         var fromStatus = incident.Status.ToString();
         string? toStatus = null;
+        var approveVotes = existingVotes.Count(v => v.IsApprove) + (request.IsApprove ? 1 : 0);
 
         if (!request.IsApprove)
         {
@@ -130,15 +145,11 @@ public class SubmitApprovalCommandHandler : IRequestHandler<SubmitApprovalComman
                 await _capa.SaveChangesAsync(ct);
             }
         }
-        else
+        else if (approveVotes >= RequiredApprovals)
         {
-            var approveCount = existingVotes.Count(v => v.IsApprove) + 1;
-            if (approveCount >= 2)
-            {
-                var next = _gateAdvance[request.ApprovalType];
-                _stateMachine.Transition(incident, next);
-                toStatus = next.ToString();
-            }
+            var next = _gateAdvance[request.ApprovalType];
+            _stateMachine.Transition(incident, next);
+            toStatus = next.ToString();
         }
 
         await _incidents.SaveChangesAsync(ct);
@@ -174,5 +185,11 @@ public class SubmitApprovalCommandHandler : IRequestHandler<SubmitApprovalComman
                 Channels: ["InApp"]
             ), ct);
         }
+
+        return new SubmitApprovalResult(
+            GateCompleted: toStatus is not null,
+            NewStatus: toStatus,
+            ApproveVotes: approveVotes,
+            RequiredApprovals: RequiredApprovals);
     }
 }

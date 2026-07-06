@@ -12,12 +12,21 @@ export interface PendingApproval {
   title: string;          // incident short description
   submittedBy: string | null;
   submittedAt: string;
+  approveVotes: number;      // approvals already cast by other approvers
+  requiredApprovals: number; // dual-control threshold (2)
 }
 
 export interface SubmitApprovalBody {
   approvalType: string;
   isApprove: boolean;
   rejectionReason?: string | null;
+}
+
+export interface SubmitApprovalResult {
+  gateCompleted: boolean;    // incident actually moved (advanced or reverted)
+  newStatus: string | null;
+  approveVotes: number;
+  requiredApprovals: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -29,7 +38,7 @@ export class ApprovalsService {
     return this.http.get<PendingApproval[]>(`${this.base}/pending`);
   }
 
-  submit(incidentId: string, body: SubmitApprovalBody): Observable<void> {
-    return this.http.post<void>(`${this.base}/${incidentId}`, body);
+  submit(incidentId: string, body: SubmitApprovalBody): Observable<SubmitApprovalResult> {
+    return this.http.post<SubmitApprovalResult>(`${this.base}/${incidentId}`, body);
   }
 }

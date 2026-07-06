@@ -13,5 +13,7 @@ public record PendingApprovalDto(
     string ApprovalTitle,  // display label, e.g. "CAPA Verification"
     string Title,          // incident short description
     string? SubmittedBy,   // reporter name (or null / masked)
-    DateTime SubmittedAt
+    DateTime SubmittedAt,
+    int ApproveVotes,      // approvals already cast on the active gate by other approvers
+    int RequiredApprovals  // dual-control threshold (2)
 );

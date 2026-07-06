@@ -28,5 +28,11 @@ public class ApprovalEventRepository : IApprovalEventRepository
            .Where(e => e.IncidentId == incidentId && e.ApprovalType == type)
            .ToListAsync(ct);
 
+    public Task<List<ApprovalEvent>> GetByIncidentIdsAsync(
+        IReadOnlyCollection<Guid> incidentIds, CancellationToken ct) =>
+        _db.ApprovalEvents
+           .Where(e => incidentIds.Contains(e.IncidentId))
+           .ToListAsync(ct);
+
     public Task SaveChangesAsync(CancellationToken ct) => _db.SaveChangesAsync(ct);
 }
